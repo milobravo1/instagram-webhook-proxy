@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Instagram Webhook Verification Proxy
-Handles Meta's webhook verification, then forwards DMs to n8n with flattened structure
+Handles Meta's webhook verification, then forwards DMs to n8n with proper format
 """
 
 from flask import Flask, request, jsonify
@@ -36,10 +36,6 @@ def webhook():
         data = request.get_json()
         print(f"Received raw payload: {data}")
 
-        # Extract and flatten the Instagram payload
-        # Instagram sends: {"object": "instagram", "entry": [{"messaging": [{"sender": {...}, "message": {...}}]}]}
-        # We flatten to: {"sender": {...}, "message": {...}}
-
         try:
             if data.get('object') == 'instagram':
                 entries = data.get('entry', [])
@@ -49,18 +45,20 @@ def webhook():
 
                     if messaging:
                         first_msg = messaging[0]
+                        sender = first_msg.get('sender', {})
+                        msg_obj = first_msg.get('message', {})
 
-                        # Extract sender and message, flatten to root level
-                        flattened_payload = {
-                            'sender': first_msg.get('sender'),
-                            'message': first_msg.get('message'),
-                            'timestamp': first_entry.get('time')
+                        # Transform to format expected by n8n workflow
+                        transformed_payload = {
+                            'sender_id': sender.get('id', ''),
+                            'message': msg_obj.get('text', ''),
+                            'timestamp': int(first_entry.get('time', 0)) / 1000
                         }
 
-                        print(f"Flattened payload: {flattened_payload}")
+                        print(f"Transformed payload: {transformed_payload}")
 
-                        # Forward to n8n with flattened structure
-                        response = requests.post(N8N_WEBHOOK_URL, json=flattened_payload, timeout=10)
+                        # Forward to n8n
+                        response = requests.post(N8N_WEBHOOK_URL, json=transformed_payload, timeout=10)
                         print(f"Forwarded to n8n: {response.status_code}")
                         return jsonify({"status": "ok"}), 200
 
@@ -68,7 +66,6 @@ def webhook():
             print(f"Error processing payload: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
-        # No messaging data found
         print("No messaging data in payload")
         return jsonify({"status": "ok"}), 200
 
