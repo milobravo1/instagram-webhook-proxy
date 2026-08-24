@@ -6,6 +6,7 @@ app = Flask(__name__)
 VERIFY_TOKEN = "0c2af10d8432b828d09e211805d8fc9d"
 N8N_WEBHOOK_URL = "https://milobravo1.app.n8n.cloud/webhook/tmt-ig-dms-2026"
 
+@app.route('/', methods=['GET', 'POST'])
 @app.route('/webhook/instagram-verify', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
@@ -13,15 +14,17 @@ def webhook():
         token = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge')
         
+        print(f"Verification attempt: mode={mode}, token={token[:20]}..., challenge={challenge}")
+        
         if mode == 'subscribe' and token == VERIFY_TOKEN:
             print(f"✓ Webhook verified!")
             return challenge, 200
-        print(f"✗ Verification failed")
+        print(f"✗ Verification failed. Token mismatch.")
         return "Forbidden", 403
     
     if request.method == 'POST':
         data = request.get_json()
-        print(f"Received: {data}")
+        print(f"Received DM: {data}")
         try:
             requests.post(N8N_WEBHOOK_URL, json=data, timeout=10)
             return jsonify({"status": "ok"}), 200
