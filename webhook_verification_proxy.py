@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 # Configuration
 VERIFY_TOKEN = "0c2af10d8432b828d09e211805d8fc9d"
-N8N_WEBHOOK_URL = "https://milobravo1.app.n8n.cloud/webhook/instagram-dm-concierge"
+N8N_WEBHOOK_URL = "https://milobravo1.app.n8n.cloud/webhook/ig-reply-2026"
 
 @app.route('/webhook/instagram-verify', methods=['GET', 'POST'])
 def webhook():
