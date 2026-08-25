@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Instagram Webhook Verification Proxy
-Handles Meta's webhook verification, then forwards DMs to n8n with proper format
+Handles Meta's webhook verification, then forwards DMs to n8n with flattened structure
 """
 
 from flask import Flask, request, jsonify
@@ -26,15 +26,19 @@ def webhook():
         # Verify the token
         if mode == 'subscribe' and token == VERIFY_TOKEN:
             print(f"✓ Webhook verified! Challenge: {challenge}")
-            return challenge, 200
+            return challenge, 200, {'Content-Type': 'text/plain'}
         else:
             print(f"✗ Verification failed. Token: {token}")
-            return "Forbidden", 403
+            return "Forbidden", 403, {'Content-Type': 'text/plain'}
 
     # Handle incoming DMs (POST)
     if request.method == 'POST':
         data = request.get_json()
         print(f"Received raw payload: {data}")
+
+        # Extract and flatten the Instagram payload
+        # Instagram sends: {"object": "instagram", "entry": [{"messaging": [{"sender": {...}, "message": {...}}]}]}
+        # We flatten to: {"sender": {...}, "message": {...}}
 
         try:
             if data.get('object') == 'instagram':
@@ -48,16 +52,16 @@ def webhook():
                         sender = first_msg.get('sender', {})
                         msg_obj = first_msg.get('message', {})
 
-                        # Transform to format expected by n8n workflow
+                        # Transform to format expected by Parse IG Lead node
                         transformed_payload = {
-                            'sender_id': sender.get('id', ''),
-                            'message': msg_obj.get('text', ''),
-                            'timestamp': int(first_entry.get('time', 0)) / 1000
+                            'sender_id': sender.get('id', ''),  # Keep original sender ID
+                            'message': msg_obj.get('text', ''),  # Extract text from nested object
+                            'timestamp': int(first_entry.get('time', 0)) / 1000  # Convert ms to seconds
                         }
 
                         print(f"Transformed payload: {transformed_payload}")
 
-                        # Forward to n8n
+                        # Forward to n8n with proper format
                         response = requests.post(N8N_WEBHOOK_URL, json=transformed_payload, timeout=10)
                         print(f"Forwarded to n8n: {response.status_code}")
                         return jsonify({"status": "ok"}), 200
@@ -66,6 +70,7 @@ def webhook():
             print(f"Error processing payload: {e}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
+        # No messaging data found
         print("No messaging data in payload")
         return jsonify({"status": "ok"}), 200
 
